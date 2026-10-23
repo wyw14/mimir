@@ -109,6 +109,13 @@ type RuleCommand struct {
 	// Rules check flags
 	Strict bool
 
+	// Dependencies (local, no Mimir access) flags
+	DepsRuleTargets []string
+	DepsNamespace   string
+	DepsGroup       string
+	DepsFormat      string
+	DepsOutputFile  string
+
 	// List Rules Config
 	Format string
 
@@ -172,6 +179,9 @@ func (r *RuleCommand) Register(app *kingpin.Application, envVars EnvVarNames, lo
 	checkCmd := rulesCmd.
 		Command("check", "Run various best practice checks against rules.").
 		Action(r.checkRules)
+	dependenciesCmd := rulesCmd.
+		Command("dependencies", "Statically analyze recording-rule dependencies in local rule files. Does not contact Grafana Mimir and does not modify the rule files.").
+		Action(r.analyzeDependencies)
 	deleteNamespaceCmd := rulesCmd.
 		Command("delete-namespace", "Delete a namespace from the ruler.").
 		Action(r.deleteNamespace)
@@ -295,6 +305,30 @@ func (r *RuleCommand) Register(app *kingpin.Application, envVars EnvVarNames, lo
 		"Comma separated list of paths to directories containing rules yaml files. Each file in a directory with a .yml or .yaml suffix will be parsed.",
 	).StringVar(&r.RuleFilesPath)
 	checkCmd.Flag("strict", "fails rules checks that do not match best practices exactly").BoolVar(&r.Strict)
+
+	// Dependencies Command (local analysis, no Grafana Mimir contact)
+	dependenciesCmd.Arg("rule-files", "The rule files to analyze.").ExistingFilesVar(&r.RuleFilesList)
+	dependenciesCmd.Flag(
+		"rule-dirs",
+		"Comma separated list of paths to directories containing rules yaml files. Each file in a directory with a .yml or .yaml suffix will be parsed.",
+	).StringVar(&r.RuleFilesPath)
+	dependenciesCmd.Flag(
+		"rule",
+		"Recorded metric name of a recording rule to report usage for; the rules that use it directly or indirectly are listed. Can be set multiple times.",
+	).StringsVar(&r.DepsRuleTargets)
+	dependenciesCmd.Flag(
+		"namespace",
+		"Restricts --rule to recording rules in the given namespace. Used to disambiguate recording rules that share a record name.",
+	).StringVar(&r.DepsNamespace)
+	dependenciesCmd.Flag(
+		"group",
+		"Restricts --rule to recording rules in the given rule group. Used to disambiguate recording rules that share a record name.",
+	).StringVar(&r.DepsGroup)
+	dependenciesCmd.Flag(
+		"format",
+		"Output format: <text|json>. JSON output is deterministically ordered for stable use in scripts and diffs.",
+	).Default(dependenciesFormatText).EnumVar(&r.DepsFormat, dependenciesFormats...)
+	dependenciesCmd.Flag("output", "Write the report to the given file instead of standard output.").StringVar(&r.DepsOutputFile)
 
 	// List Command
 	listCmd.Flag("format", "Backend type to interact with: <json|yaml|table>").Default("table").EnumVar(&r.Format, formats...)

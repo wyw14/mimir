@@ -540,6 +540,45 @@ ERRO[0000] bad recording rule name error="recording rule name does not match lev
 
 The format of the file is the same format as shown in [rules load](#load-rule-group).
 
+#### Dependencies
+
+The `dependencies` command statically analyzes local rule files and builds a dependency graph between recording rule output names and the exact metric name references used in PromQL expressions.
+
+The output keeps the namespace, rule group, and rule index of every rule and, for each metric, lists the recording rules that produce it and the rules that use it. It additionally reports:
+
+- Recording rules that share a record name: all producers are kept and the metric is marked as _ambiguous_.
+- Metric selectors that cannot be statically resolved, such as `{__name__=~"regex"}`, `{__name__!="metric"}`, or label-only selectors such as `{job="api-server"}`; these do not create dependency edges.
+- Circular dependencies between recording rules, in a separate section.
+
+When `--rule` is set, the command also lists the rules that directly or indirectly use the named recording rule.
+
+{{< admonition type="note" >}}
+This command runs entirely on local files. It does not interact with your Grafana Mimir cluster and it does not modify the rule files.
+{{< /admonition >}}
+
+```bash
+mimirtool rules dependencies [<file_path>...] [flags]
+```
+
+##### Configuration
+
+| Flag          | Description                                                                                                                                                                                |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `--rule`      | Recorded metric name of a recording rule to report usage for; the rules that use it directly or indirectly are listed. Can be set multiple times.                                         |
+| `--namespace` | Restricts `--rule` to recording rules in the given namespace. Used to disambiguate recording rules that share a record name.                                                              |
+| `--group`     | Restricts `--rule` to recording rules in the given rule group. Used to disambiguate recording rules that share a record name.                                                             |
+| `--rule-dirs` | Comma separated list of paths to directories containing rules YAML files. Each file in a directory with a `.yml` or `.yaml` suffix is parsed.                                             |
+| `--format`    | Output format: `text` (default) or `json`. The JSON output is deterministically ordered, which makes it suitable for scripts and diffs.                                                   |
+| `--output`    | Writes the report to the given file instead of standard output.                                                                                                                           |
+
+##### Example
+
+```bash
+mimirtool rules dependencies --rule=service:requests:ratio --format=json rules.yaml
+```
+
+The JSON report contains a `rules` index, a `metrics` list with `producers` and `consumers`, `unresolved_references`, `cycles`, and a `usages` section with `direct_users` and `indirect_users` for each requested `--rule`.
+
 #### Diff
 
 The following command compares rules against the rules in your Grafana Mimir cluster.
